@@ -1,14 +1,12 @@
 [package]
-name = "client"
+name = "shared"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-wbindgen = [ "naia-client-socket/wbindgen", "shared/wbindgen" ]
+wbindgen = [ "naia-socket-shared/wbindgen" ]
 
 [dependencies]
-bevy = "0.6.1"
-naia-client-socket = "0.8"
-shared = { path = "../shared" }
+naia-socket-shared = "0.8"
