@@ -1,11 +1,11 @@
 use bevy::prelude::*;
-use naia_server_socket::{Packet, PacketReceiver, PacketSender, ServerAddrs, Socket};
+use naia_server_socket::{PacketReceiver, PacketSender, ServerAddrs, Socket};
 
-use shared::{shared_config, PING_MSG, PONG_MSG};
+use shared::shared_config;
 
 pub struct App {
-    packet_sender: PacketSender,
-    packet_receiver: PacketReceiver,
+    pub packet_sender: PacketSender,
+    pub packet_receiver: PacketReceiver,
 }
 
 impl App {
@@ -31,27 +31,6 @@ impl App {
         App {
             packet_sender: socket.packet_sender(),
             packet_receiver: socket.packet_receiver(),
-        }
-    }
-
-    pub fn update(&mut self) {
-        match self.packet_receiver.receive() {
-            Ok(Some(packet)) => {
-                let address = packet.address();
-                let message_from_client = String::from_utf8_lossy(packet.payload());
-                info!("Server recv <- {}: {}", address, message_from_client);
-
-                if message_from_client.eq(PING_MSG) {
-                    let message_to_client: String = PONG_MSG.to_string();
-                    info!("Server send -> {}: {}", address, message_to_client);
-                    self.packet_sender
-                        .send(Packet::new(address, message_to_client.into_bytes()));
-                }
-            }
-            Ok(None) => {}
-            Err(error) => {
-                info!("Server Error: {}", error);
-            }
         }
     }
 }
