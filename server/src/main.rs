@@ -1,40 +1,52 @@
-use bevy::prelude::*;
-use naia_server_socket::Packet;
-use shared::{PING_MSG, PONG_MSG};
+use std::net::SocketAddr;
 
-mod app;
-use app::App as MyApp;
+use bevy::{log::LogPlugin, prelude::*};
+
+use bevy_networking_turbulence::{NetworkEvent, NetworkResource, NetworkingPlugin, Packet};
+use shared::SERVER_PORT;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(MinimalPlugins)
+        .add_plugin(LogPlugin)
+        .add_plugin(NetworkingPlugin::default())
         .add_startup_system(setup)
-        .add_system(update)
+        .add_system(handle_packets)
         .run();
 }
 
-fn setup(mut commands: Commands) {
-    commands.insert_resource(MyApp::new());
+fn setup(mut net: ResMut<NetworkResource>) {
+    let ip_address =
+        bevy_networking_turbulence::find_my_ip_address().expect("can't find ip address");
+    let server_address = SocketAddr::new(ip_address, SERVER_PORT);
+
+    info!("Starting server");
+    net.listen(server_address, None, None);
 }
 
-fn update(mut app_res: ResMut<MyApp>) {
-    match app_res.packet_receiver.receive() {
-        Ok(Some(packet)) => {
-            let address = packet.address();
-            let message_from_client = String::from_utf8_lossy(packet.payload());
-            info!("Server recv <- {}: {}", address, message_from_client);
-
-            if message_from_client.eq(PING_MSG) {
-                let message_to_client: String = PONG_MSG.to_string();
-                info!("Server send -> {}: {}", address, message_to_client);
-                app_res
-                    .packet_sender
-                    .send(Packet::new(address, message_to_client.into_bytes()));
+fn handle_packets(
+    mut net: ResMut<NetworkResource>,
+    time: Res<Time>,
+    mut reader: EventReader<NetworkEvent>,
+) {
+    for event in reader.iter() {
+        match event {
+            NetworkEvent::Packet(handle, packet) => {
+                let message = String::from_utf8_lossy(packet);
+                info!("Got packet on [{}]: {}", handle, message);
+                if message == "PING" {
+                    let message = format!("PONG @ {}", time.seconds_since_startup());
+                    match net.send(*handle, Packet::from(message)) {
+                        Ok(()) => {
+                            info!("Sent PONG");
+                        }
+                        Err(error) => {
+                            info!("PONG send error: {}", error);
+                        }
+                    }
+                }
             }
-        }
-        Ok(None) => {}
-        Err(error) => {
-            info!("Server Error: {}", error);
+            event => info!("{event:?} received!"),
         }
     }
 }

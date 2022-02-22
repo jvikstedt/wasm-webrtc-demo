@@ -1,27 +1,20 @@
+use std::net::SocketAddr;
+
 use bevy::prelude::*;
-
-use naia_client_socket::{Packet, PacketReceiver, PacketSender, ServerAddr, Socket};
-use shared::{shared_config, PING_MSG};
-
-pub struct Conn {
-    packet_sender: PacketSender,
-    packet_receiver: PacketReceiver,
-}
+use bevy_networking_turbulence::{NetworkEvent, NetworkResource, NetworkingPlugin, Packet};
+use shared::SERVER_PORT;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_startup_system(hello_wasm_system)
+        .add_plugin(NetworkingPlugin::default())
         .add_startup_system(setup)
-        .add_system(poll)
+        .add_system(send_packets)
+        .add_system(handle_packets)
         .run();
 }
 
-fn hello_wasm_system() {
-    info!("hello wasm");
-}
-
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, mut net: ResMut<NetworkResource>) {
     let mut camera_bundle = OrthographicCameraBundle::new_2d();
     camera_bundle.orthographic_projection.scale = 1. / 50.;
     commands.spawn_bundle(camera_bundle);
@@ -34,43 +27,52 @@ fn setup(mut commands: Commands) {
         ..Default::default()
     });
 
-    let shared_config = shared_config();
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            let mut server_address: SocketAddr = "192.168.1.105:0".parse().unwrap();
+            server_address.set_port(SERVER_PORT);
+        } else {
+            let ip_address =
+                bevy_networking_turbulence::find_my_ip_address().expect("can't find ip address");
+            let server_address = SocketAddr::new(ip_address, SERVER_PORT);
+        }
+    }
 
-    let mut socket = Socket::new(shared_config);
-    socket.connect("http://127.0.0.1:14191");
-
-    commands.insert_resource(Conn {
-        packet_sender: socket.packet_sender(),
-        packet_receiver: socket.packet_receiver(),
-    });
+    info!("Starting client");
+    net.connect(server_address);
 }
 
-fn poll(mut conn_res: ResMut<Conn>) {
-    match conn_res.packet_receiver.receive() {
-        Ok(Some(packet)) => {
-            let message_from_server = String::from_utf8_lossy(packet.payload());
+fn send_packets(mut net: ResMut<NetworkResource>, time: Res<Time>) {
+    // Client context
+    if (time.seconds_since_startup() * 60.) as i64 % 60 == 0 {
+        info!("PING");
+        net.broadcast(Packet::from("PING"));
+    }
+}
 
-            let server_addr = match conn_res.packet_receiver.server_addr() {
-                ServerAddr::Found(addr) => addr.to_string(),
-                _ => "".to_string(),
-            };
-            info!("Client recv <- {}: {}", server_addr, message_from_server);
-        }
-        Ok(None) => {
-            let message_to_server: String = PING_MSG.to_string();
-
-            let server_addr = match conn_res.packet_receiver.server_addr() {
-                ServerAddr::Found(addr) => addr.to_string(),
-                _ => "".to_string(),
-            };
-            info!("Client send -> {}: {}", server_addr, message_to_server);
-
-            conn_res
-                .packet_sender
-                .send(Packet::new(message_to_server.into_bytes()));
-        }
-        Err(err) => {
-            info!("Client Error: {}", err);
+fn handle_packets(
+    mut net: ResMut<NetworkResource>,
+    time: Res<Time>,
+    mut reader: EventReader<NetworkEvent>,
+) {
+    for event in reader.iter() {
+        match event {
+            NetworkEvent::Packet(handle, packet) => {
+                let message = String::from_utf8_lossy(packet);
+                info!("Got packet on [{}]: {}", handle, message);
+                if message == "PING" {
+                    let message = format!("PONG @ {}", time.seconds_since_startup());
+                    match net.send(*handle, Packet::from(message)) {
+                        Ok(()) => {
+                            info!("Sent PONG");
+                        }
+                        Err(error) => {
+                            info!("PONG send error: {}", error);
+                        }
+                    }
+                }
+            }
+            event => info!("{event:?} received!"),
         }
     }
 }

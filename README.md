@@ -2,10 +2,10 @@
 
 Start server
 ```sh
-cargo watch -cx "run --bin server --features bevy/dynamic,use-webrtc"
+cargo watch -cx "run --bin server --features bevy/dynamic"
 ```
 
 Start client
 ```sh
-cargo watch -cx "run --bin client --target wasm32-unknown-unknown --features wbindgen"
+cargo watch -cx "run --bin client --target wasm32-unknown-unknown"
 ```

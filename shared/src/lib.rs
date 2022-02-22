@@ -1,2 +1,1 @@
-mod shared;
-pub use shared::{shared_config, PING_MSG, PONG_MSG};
+pub const SERVER_PORT: u16 = 14191;

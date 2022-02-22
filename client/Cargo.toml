@@ -5,11 +5,8 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = ["wbindgen"]
-wbindgen = [ "naia-client-socket/wbindgen", "shared/wbindgen" ]
-
 [dependencies]
 bevy = "0.6.1"
-naia-client-socket = "0.8"
+bevy_networking_turbulence = { version = "0.4", default-features = false, features = ["use-webrtc"] }
+cfg-if = "1.0"
 shared = { path = "../shared" }
